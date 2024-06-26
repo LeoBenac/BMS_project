@@ -24,7 +24,7 @@ class BMSenv(gym.Env):
         super(BMSenv, self).__init__()
 
         # Define action and observation space
-        self.observation_space = spaces.Box(low=0, high=1, shape=(num_cells,), dtype=np.float32)
+        self.observation_space = spaces.Box(low= self.MIN_VOLTAGE, high=self.MAX_VOLTAGE, shape=(num_cells,), dtype=np.float32)
         self.action_space = spaces.Discrete(2**num_cells)
 
         self.num_cells = num_cells
@@ -111,12 +111,11 @@ class BMSenv(gym.Env):
 
 
         state_SoC = state_SoC - (self.I_CURRENT * self.TIMESTEP / self.Q_cells) * switch_action
-        state_SoC = np.clip(state_SoC, 0.1, 0.9)
 
         self.state_soc = state_SoC
 
         self.state = self.map_soc_to_voltage(state_SoC, self.k_tanh_params)
-        self.state = np.clip(self.state, self.MIN_VOLTAGE, self.MAX_VOLTAGE)
+
 
     def step(self, action) -> tuple:
         """
@@ -159,7 +158,9 @@ class BMSenv(gym.Env):
         Returns:
         float: The calculated reward.
         """
-        reward =  (np.std(state) - np.std(state_next))* self.W_reward
+        # reward =  (np.std(state) - np.std(state_next))* self.W_reward
+
+        reward = -1* np.std(state) * self.W_reward
 
 
         if action == 0:
