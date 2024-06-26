@@ -13,13 +13,12 @@ class BMSenv(gym.Env):
     INIT_SOC = 0.9
     I_CURRENT = 0.22
     TIMESTEP = 1e-3
-    W_reward = 1.0
 
 
 
     
     def __init__(self, num_cells: int = 2,  k_tanh_params : list = [0.75, 2.0],
-                   Q_cells: list = [2.35, 2.35]):
+                   Q_cells: list = [2.35, 2.35], w_reward= 1.0):
         
         super(BMSenv, self).__init__()
 
@@ -36,6 +35,7 @@ class BMSenv(gym.Env):
         self.Q_cells = np.array(Q_cells)
        
         self._initialize_state()
+        self.w_reward = w_reward
 
 
     def _initialize_state(self) -> None:
@@ -160,7 +160,7 @@ class BMSenv(gym.Env):
         """
         # reward =  (np.std(state) - np.std(state_next))* self.W_reward
 
-        reward = -1* np.std(state) * self.W_reward
+        reward = -1* np.std(state) * self.w_reward
 
 
         if action == 0:
@@ -210,7 +210,7 @@ class BMSenv(gym.Env):
                 f"        INIT_SOC={self.INIT_SOC},\n"
                 f"        I_CURRENT={self.I_CURRENT},\n"
                 f"        TIMESTEP={self.TIMESTEP},\n"
-                f"        W_reward={self.W_reward},\n"
+                f"        w_reward={self.w_reward},\n"
                 f"        current_state={self.state},\n"
                 f"        current_soc={self.state_soc})")
 
