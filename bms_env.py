@@ -39,7 +39,7 @@ class BMSenv(gym.Env):
 
 
     def _initialize_state(self) -> None:
-        self.state = np.array([self.MAX_VOLTAGE]* self.num_cells)
+        self.state = np.array([self.MAX_VOLTAGE - 1e-5]* self.num_cells)
         self.state_soc = self.map_voltage_to_soc(self.state, self.k_tanh_params)
 
 

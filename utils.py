@@ -92,3 +92,66 @@ def plot_voltage_vs_soc(bms):
     plt.legend()
     plt.show()
 
+
+
+def discretize(value: float, bins: np.array) -> int:
+    """
+    Discretize a continuous value into a bin number based on predefined ranges and densities.
+
+    Parameters:
+    value (float): The continuous value to be discretized.
+
+    Returns:
+    int: The bin number corresponding to the input value.
+
+    Raises:
+    ValueError: If the value is outside the allowed range.
+    """
+    if not (2.2 <= value < 4.2):
+        raise ValueError("Value must be between 2.2 and 4.2")
+
+    bin_number = np.digitize(value, bins) - 1  # Subtract 1 to get 0-based index
+    return bin_number
+
+def discretize_features(values: np.array, bins: np.array) -> np.array:
+    """
+    Discretize multiple continuous features into bin numbers based on predefined ranges and densities.
+
+    Parameters:
+    values (np.array): The continuous values to be discretized.
+
+    Returns:
+    np.array: The bin numbers corresponding to the input values.
+    """
+    return np.array([discretize(value, bins) for value in values])
+
+def combination_to_integer(discretized_values: np.array, num_bins: int) -> int:
+    """
+    Convert a combination of discretized values to a unique integer.
+
+    Parameters:
+    discretized_values (np.array): The array of discretized values.
+    num_bins (int): The number of bins used for discretization.
+
+    Returns:
+    int: A unique integer representing the combination of discretized values.
+    """
+    unique_integer = 0
+    for i, value in enumerate(discretized_values):
+        unique_integer += value * (num_bins ** i)
+    return unique_integer
+
+def features_to_unique_integer(features: np.array, bins: np.array) -> int:
+    """
+    Convert features to a unique integer based on discretization.
+
+    Parameters:
+    features (np.array): The continuous features to be discretized.
+    bins (np.array): The bins used for discretization.
+
+    Returns:
+    int: A unique integer representing the combination of discretized features.
+    """
+    discretized_features = discretize_features(features, bins)
+    num_bins = len(bins) - 1  # Corrected number of bins
+    return combination_to_integer(discretized_features, num_bins)
