@@ -18,7 +18,7 @@ class BMSenv(gym.Env):
 
     
     def __init__(self, num_cells: int = 2,  k_tanh_params : list = [0.75, 2.0],
-                   Q_cells: list = [2.35, 2.35], w_reward= 1.0):
+                   Q_cells: list = [2.35, 2.35], w_reward= 10.0):
         
         super(BMSenv, self).__init__()
 
@@ -158,9 +158,18 @@ class BMSenv(gym.Env):
         Returns:
         float: The calculated reward.
         """
-        # reward =  (np.std(state) - np.std(state_next))* self.W_reward
+        reward =  (np.std(state) - np.std(state_next))* self.w_reward
 
-        reward = -1* np.std(state) * self.w_reward
+        # reward = -1* np.std(state) * self.w_reward
+
+        # std_before = np.std(state)
+        # std_after = np.std(state_next)
+
+        # reward = -std_after * self.w_reward/2
+
+        # if std_after < std_before:
+        #     reward += (std_before - std_after) * self.w_reward
+
 
 
         if action == 0:
