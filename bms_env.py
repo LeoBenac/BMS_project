@@ -1,5 +1,5 @@
-import gym
-from gym import spaces
+import gymnasium as gym
+from gymnasium import spaces
 import numpy as np
 
 class BMSenv(gym.Env):
@@ -18,12 +18,12 @@ class BMSenv(gym.Env):
 
     
     def __init__(self, num_cells: int = 2,  k_tanh_params : list = [0.75, 2.0],
-                   Q_cells: list = [2.35, 2.35], w_reward= 10.0):
+                   Q_cells: list = [2.35, 2.35], w_reward= 100.0):
         
         super(BMSenv, self).__init__()
 
         # Define action and observation space
-        self.observation_space = spaces.Box(low= self.MIN_VOLTAGE, high=self.MAX_VOLTAGE, shape=(num_cells,), dtype=np.float32)
+        self.observation_space = spaces.Box(low= self.MIN_VOLTAGE, high=self.MAX_VOLTAGE , shape=(num_cells,), dtype=np.float64)
         self.action_space = spaces.Discrete(2**num_cells)
 
         self.num_cells = num_cells
@@ -73,7 +73,9 @@ class BMSenv(gym.Env):
         float: The corresponding voltage value
         """
         # Inverse of the SOC mapping function
-        return 3.2 + 0.5 * np.arctanh((soc - 0.1) / 0.8 * 2 - 1) / k
+        # return 3.2 + 0.5 * np.arctanh((soc - 0.1) / 0.8 * 2 - 1) / k
+        soc_clipped = np.clip((soc - 0.1) / 0.8 * 2 - 1, -1 + 1e-10, 1 - 1e-10)  # Clip values to avoid invalid arctanh
+        return 3.2 + 0.5 * np.arctanh(soc_clipped) / k
     
 
     def int_action_to_switch_action(self, action: int) -> np.array:
@@ -137,9 +139,10 @@ class BMSenv(gym.Env):
         reward = self.get_reward(state, state_next, action)
 
 
-        done = self.is_done()
+        done = bool(self.is_done())
+        truncated = bool(done)
         info = {}
-        return state_next, reward, done, info
+        return state_next, reward, done, truncated, info
     
 
     def get_reward(self, state: np.array, state_next: np.array, action: int) -> float:
@@ -158,18 +161,7 @@ class BMSenv(gym.Env):
         Returns:
         float: The calculated reward.
         """
-        reward =  (np.std(state) - np.std(state_next))* self.w_reward
-
-        # reward = -1* np.std(state) * self.w_reward
-
-        # std_before = np.std(state)
-        # std_after = np.std(state_next)
-
-        # reward = -std_after * self.w_reward/2
-
-        # if std_after < std_before:
-        #     reward += (std_before - std_after) * self.w_reward
-
+        reward =  (np.std(state) -  np.std(state_next))* self.w_reward 
 
 
         if action == 0:
@@ -186,19 +178,31 @@ class BMSenv(gym.Env):
         Returns:
         done (bool): Whether the episode has ended
         """
-        return self.state.min() <= self.MIN_VOLTAGE
+        return self.state.min() <= (self.MIN_VOLTAGE + 1e-5)
     
 
     
-    def reset(self) -> None:
+    def reset(self, seed=None):
         """
         Reset the state of the environment to an initial state.
         
+        Parameters:
+        seed (int): Seed for random number generator.
+        
         Returns:
         state (np.array): The initial state of the environment
+        info (dict): Additional info
         """
+
+        if seed is not None:
+            np.random.seed(seed)
+
         self._initialize_state()
-        return self.get_state()
+        state = self.get_state()
+        info = {}  # Add any additional info you want to return
+
+
+        return state, info
 
     def render(self, mode='human', close=False) -> None:
         """

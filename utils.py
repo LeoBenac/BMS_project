@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones):
+def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include_bad_rewards = False):
     colors = plt.cm.tab10.colors[:bms.num_cells]
 
     fig, axs = plt.subplots(2, 2, figsize=(14, 10))
@@ -11,7 +11,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones):
       start_idx = 0
       for j in range(len(states) -1):
           if actions[j][i] != actions[start_idx][i]:
-              linestyle = '-' if actions[start_idx][i] == 1 else '--'
+              linestyle = '-' if actions[start_idx][i] == 1 else '-'
               axs[0, 0].plot(range(start_idx, j+1), [states[k][i] for k in range(start_idx, j+1)], 
                             color=colors[i], linestyle=linestyle, label=f'Cell {i+1}' if start_idx == 0 else "")
               start_idx = j
@@ -32,7 +32,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones):
         start_idx = 0
         for j in range(len(states_soc) - 1):
             if actions[j][i] != actions[start_idx][i]:
-                linestyle = '-' if actions[start_idx][i] == 1 else '--'
+                linestyle = '-' if actions[start_idx][i] == 1 else '-'
                 axs[0, 1].plot(range(start_idx, j+1), [states_soc[k][i] for k in range(start_idx, j+1)], 
                               color=colors[i], linestyle=linestyle, label=f'Cell {i+1}' if start_idx == 0 else "")
                 start_idx = j
@@ -48,20 +48,43 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones):
     axs[0, 1].set_ylim((0, 1))
 
 
+    # # Plotting the evolution of actions for each cell
+    # for i in range(bms.num_cells):
+    #     axs[1, 0].scatter( np.arange(1, len(actions) + 1),  [actions[j][i] for j in range(len(actions))], color=colors[i], label=f'Cell {i+1}')
+    # axs[1, 0].set_xlabel('Time Step')
+    # axs[1, 0].set_ylabel('Action')
+    # axs[1, 0].set_title('Action vs Time Step for Each Cell')
+    # axs[1, 0].legend()
+    # axs[1, 0].set_ylim(-0.5, 1.5)
+
     # Plotting the evolution of actions for each cell
     for i in range(bms.num_cells):
-        axs[1, 0].scatter( np.arange(1, len(actions) + 1),  [actions[j][i] for j in range(len(actions))], color=colors[i], label=f'Cell {i+1}')
+        for j in range(len(actions)):
+            color = 'blue' if actions[j][i] == 1 else 'red'
+            axs[1, 0].barh(i, 1, left=j, color=color, edgecolor='none', height=0.8)
     axs[1, 0].set_xlabel('Time Step')
-    axs[1, 0].set_ylabel('Action')
+    axs[1, 0].set_ylabel('Cell Number')
     axs[1, 0].set_title('Action vs Time Step for Each Cell')
-    axs[1, 0].legend()
-    axs[1, 0].set_ylim(-0.5, 1.5)
+    axs[1, 0].set_yticks(range(bms.num_cells))  # Fix y-ticks
+    axs[1, 0].set_yticklabels([f'Cell {i+1}' for i in range(bms.num_cells)])  # Add labels to y-ticks
+    axs[1, 0].set_ylim(-0.5, bms.num_cells - 0.5)
+    axs[1, 0].set_xlim(0, len(actions))
+    
+    # Add legend for colors
+    from matplotlib.lines import Line2D
+    legend_elements = [Line2D([0], [0], color='blue', lw=4, label='Action 1'),
+                       Line2D([0], [0], color='red', lw=4, label='Action 0')]
+    axs[1, 0].legend(handles=legend_elements, loc='upper right')
 
     # Plotting the evolution of rewards
+    if not include_bad_rewards:
+        rewards = [np.nan if reward == -100 else reward for reward in rewards]
     axs[1, 1].scatter(np.arange(1, len(rewards) +1) , rewards)
     axs[1, 1].set_xlabel('Time Step')
     axs[1, 1].set_ylabel('Reward')
     axs[1, 1].set_title('Reward vs Time Step')
+
+    
 
     plt.tight_layout()
     plt.show()
@@ -155,3 +178,52 @@ def features_to_unique_integer(features: np.array, bins: np.array) -> int:
     discretized_features = discretize_features(features, bins)
     num_bins = len(bins) - 1  # Corrected number of bins
     return combination_to_integer(discretized_features, num_bins)
+
+
+
+def integer_to_combination(unique_integer: int, num_bins: int, num_dimensions: int) -> np.array:
+    """
+    Convert a unique integer back to a combination of discretized values.
+
+    Parameters:
+    unique_integer (int): The unique integer representing the combination of discretized values.
+    num_bins (int): The number of bins used for discretization.
+    num_dimensions (int): The number of dimensions (features).
+
+    Returns:
+    np.array: The array of discretized values.
+    """
+    discretized_values = np.zeros(num_dimensions, dtype=int)
+    for i in range(num_dimensions):
+        discretized_values[i] = unique_integer % num_bins
+        unique_integer //= num_bins
+    return discretized_values
+
+def bin_boundaries(discretized_value: int, bins: np.array) -> tuple:
+    """
+    Get the bin boundaries for a given discretized value.
+
+    Parameters:
+    discretized_value (int): The discretized bin number.
+    bins (np.array): The bins used for discretization.
+
+    Returns:
+    tuple: The lower and upper boundaries of the bin.
+    """
+    return bins[discretized_value], bins[discretized_value + 1]
+
+def unique_integer_to_bin_boundaries(unique_integer: int, bins: np.array, num_dimensions: int) -> list:
+    """
+    Convert a unique integer to the bin boundaries for each dimension.
+
+    Parameters:
+    unique_integer (int): The unique integer representing the combination of discretized values.
+    bins (np.array): The bins used for discretization.
+    num_dimensions (int): The number of dimensions (features).
+
+    Returns:
+    list: A list of tuples representing the bin boundaries for each dimension.
+    """
+    num_bins = len(bins) - 1  # Corrected number of bins
+    discretized_values = integer_to_combination(unique_integer, num_bins, num_dimensions)
+    return [bin_boundaries(value, bins) for value in discretized_values]
