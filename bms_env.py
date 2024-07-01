@@ -163,6 +163,11 @@ class BMSenv(gym.Env):
         """
         reward =  (np.std(state) -  np.std(state_next))* self.w_reward 
 
+        # reward =  (np.std(state_next) -  np.std(state))* self.w_reward 
+
+
+        # reward = -1*np.std(state_next) * self.w_reward
+
 
         if action == 0:
             reward = -100
