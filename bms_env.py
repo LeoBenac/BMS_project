@@ -134,9 +134,12 @@ class BMSenv(gym.Env):
         """
 
         state = self.get_state().copy()
+        state_soc = self.state_soc
+
         self.discharge(action)
         state_next = self.get_state().copy()
-        reward = self.get_reward(state, state_next, action)
+        state_soc_next = self.state_soc
+        reward = self.get_reward(state, state_next, action, state_soc, state_soc_next)
 
 
         done = bool(self.is_done())
@@ -145,7 +148,7 @@ class BMSenv(gym.Env):
         return state_next, reward, done, truncated, info
     
 
-    def get_reward(self, state: np.array, state_next: np.array, action: int) -> float:
+    def get_reward(self, state: np.array, state_next: np.array, action: int, state_soc: np.array, state_soc_next: np.array) -> float:
         """
         Calculate and return the reward for a given action.
         
@@ -161,13 +164,11 @@ class BMSenv(gym.Env):
         Returns:
         float: The calculated reward.
         """
-        reward =  (np.std(state) -  np.std(state_next))* self.w_reward 
+        # reward =  (np.std(state) -  np.std(state_next))* self.w_reward 
 
-        # reward =  (np.std(state_next) -  np.std(state))* self.w_reward 
+        # reward = (np.std(self.map_voltage_to_soc(state, self.k_tanh_params)) -  np.std(self.map_voltage_to_soc(state_next, self.k_tanh_params)))* self.w_reward 
 
-
-        # reward = -1*np.std(state_next) * self.w_reward
-
+        reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward 
 
         if action == 0:
             reward = -100
