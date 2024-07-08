@@ -23,8 +23,8 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
                        color=colors[i], linestyle=linestyle, label=f'Cell {i + 1}' if start_idx == 0 else "")
 
     axs[0, 0].set_xlabel('Time Step')
-    axs[0, 0].set_ylabel('State')
-    axs[0, 0].set_title('State vs Time Step for Each Cell')
+    axs[0, 0].set_ylabel('Voltage')
+    axs[0, 0].set_title('Voltage vs Time Step for Each Cell')
     axs[0, 0].legend()
     axs[0, 0].set_ylim(bms.MIN_VOLTAGE - 0.5, bms.MAX_VOLTAGE + 0.5)
 
@@ -62,17 +62,27 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
     axs[1, 0].set_xlim(0, len(actions))
 
     # Add legend for colors
-    legend_elements = [Line2D([0], [0], color='blue', lw=4, label='Action 1'),
-                       Line2D([0], [0], color='red', lw=4, label='Action 0')]
+    legend_elements = [Line2D([0], [0], color='blue', lw=4, label='ON'),
+                       Line2D([0], [0], color='red', lw=4, label='OFF')]
     axs[1, 0].legend(handles=legend_elements, loc='upper right')
 
-    # Plotting the evolution of rewards
+    # Plotting the evolution of accumulated rewards
     if not include_bad_rewards:
         rewards = [np.nan if reward == -100 else reward for reward in rewards]
-    axs[1, 1].scatter(np.arange(1, len(rewards) + 1), rewards)
+
+    # Calculate the accumulated rewards
+    accumulated_rewards = np.nancumsum(rewards)  # Use np.nancumsum to handle NaN values
+
+    # Normalize the accumulated rewards by the time step
+    time_steps = np.arange(1, len(accumulated_rewards) + 1)
+    normalized_accumulated_rewards = accumulated_rewards / time_steps
+
+    # Plot the normalized accumulated rewards
+    axs[1, 1].plot(time_steps, normalized_accumulated_rewards, label='Normalized Accumulated Rewards')
     axs[1, 1].set_xlabel('Time Step')
-    axs[1, 1].set_ylabel('Reward')
-    axs[1, 1].set_title('Reward vs Time Step')
+    axs[1, 1].set_ylabel('Normalized Accumulated Rewards')
+    axs[1, 1].set_title('Normalized Accumulated Rewards vs Time Step')
+    axs[1, 1].legend()
 
     plt.tight_layout()
     plt.show()
