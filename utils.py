@@ -4,7 +4,20 @@ from matplotlib.lines import Line2D
 
 
 def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include_bad_rewards=False):
+    
     colors = plt.cm.tab10.colors[:bms.num_cells]
+
+    colors = [
+    'b', 'g', 'r', 'c', 'm', 'y', 'k', 'orange', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan',
+    'blue', 'green', 'red', 'coral', 'navy', 'lime', 'teal', 'violet', 'gold', 'indigo', 'turquoise',
+    'darkgreen', 'salmon', 'chocolate', 'maroon', 'orchid', 'plum', 'sienna', 'tan', 'crimson', 'darkblue'
+    ]
+
+    # Ensure colors has at least `bms.num_cells` elements, otherwise cycle through available colors
+    if len(colors) < bms.num_cells:
+        colors = colors * (bms.num_cells // len(colors) + 1)
+    else:
+        colors = colors[:bms.num_cells]
 
     fig, axs = plt.subplots(2, 2, figsize=(14, 10))
 
@@ -25,7 +38,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
     axs[0, 0].set_xlabel('Time Step')
     axs[0, 0].set_ylabel('Voltage')
     axs[0, 0].set_title('Voltage vs Time Step for Each Cell')
-    axs[0, 0].legend()
+    # axs[0, 0].legend()
     axs[0, 0].set_ylim(bms.MIN_VOLTAGE - 0.5, bms.MAX_VOLTAGE + 0.5)
 
     # Plotting the evolution of states_soc for each cell
@@ -45,7 +58,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
     axs[0, 1].set_xlabel('Time Step')
     axs[0, 1].set_ylabel('State of Charge (SOC)')
     axs[0, 1].set_title('State of Charge (SOC) vs Time Step for Each Cell')
-    axs[0, 1].legend()
+    # axs[0, 1].legend()
     axs[0, 1].set_ylim((0, 1))
 
     # Plotting the evolution of actions for each cell
@@ -64,7 +77,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
     # Add legend for colors
     legend_elements = [Line2D([0], [0], color='blue', lw=4, label='ON'),
                        Line2D([0], [0], color='red', lw=4, label='OFF')]
-    axs[1, 0].legend(handles=legend_elements, loc='upper right')
+    # axs[1, 0].legend(handles=legend_elements, loc='upper right')
 
     # Plotting the evolution of accumulated rewards
     if not include_bad_rewards:
@@ -82,7 +95,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
     axs[1, 1].set_xlabel('Time Step')
     axs[1, 1].set_ylabel('Normalized Accumulated Rewards')
     axs[1, 1].set_title('Normalized Accumulated Rewards vs Time Step')
-    axs[1, 1].legend()
+    # axs[1, 1].legend()
 
     plt.tight_layout()
     plt.show()

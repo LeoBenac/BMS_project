@@ -24,7 +24,7 @@ class BMSenv(gym.Env):
 
         # Define action and observation space
         self.observation_space = spaces.Box(low= self.MIN_VOLTAGE, high=self.MAX_VOLTAGE , shape=(num_cells,), dtype=np.float64)
-        self.action_space = spaces.Discrete(2**num_cells)
+        self.action_space = spaces.MultiBinary(num_cells)
 
         self.num_cells = num_cells
 
@@ -97,6 +97,21 @@ class BMSenv(gym.Env):
         return np.array([int(bit) for bit in binary_str], dtype=np.int8)
 
 
+    def switch_action_to_int_action(self, switch_action: np.array) -> int:
+      """
+      Convert a binary array of size num_cells to an integer.
+
+      Parameters:
+      switch_action (np.array): The binary array to be converted.
+
+      Returns:
+      int: The integer representation of the binary array.
+      """
+      assert len(switch_action) == self.num_cells, f'Switch action must be of size {self.num_cells}, got {len(switch_action)}.'
+
+      binary_str = ''.join(map(str, switch_action))
+      return int(binary_str, 2)
+
 
 
 
@@ -109,7 +124,8 @@ class BMSenv(gym.Env):
         """
 
         state_SoC = self.map_voltage_to_soc(self.state, self.k_tanh_params)
-        switch_action = self.int_action_to_switch_action(action)
+        # switch_action = self.int_action_to_switch_action(action)
+        switch_action = action.copy()
 
 
         state_SoC = state_SoC - (self.I_CURRENT * self.TIMESTEP / self.Q_cells) * switch_action
@@ -170,7 +186,7 @@ class BMSenv(gym.Env):
 
         reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward 
 
-        if action == 0:
+        if np.all(action == 0):
             reward = -100
 
 
