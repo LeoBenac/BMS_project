@@ -182,12 +182,49 @@ class BMSenv(gym.Env):
         """
         # reward =  (np.std(state) -  np.std(state_next))* self.w_reward 
 
-        # reward = (np.std(self.map_voltage_to_soc(state, self.k_tanh_params)) -  np.std(self.map_voltage_to_soc(state_next, self.k_tanh_params)))* self.w_reward 
 
-        reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward 
+        # reward = (np.max(state_soc) - np.min(state_soc)) - (np.max(state_soc_next) - np.min(state_soc_next))
+
+
+        reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward  - (np.max(state_soc_next) - np.min(state_soc_next))/self.w_reward
+
+
+        # reward =  (np.std(state_soc) -  np.std(state_soc_next)) * self.w_reward
+
+        # std_soc_next = np.std(state_soc_next)
+
+        # if std_soc_next < 0.0005:
+        #     reward = 50
+
+        # elif std_soc_next < 0.001:
+        #     reward = 50
+
+        # elif std_soc_next < 0.005:
+        #     reward = 10
+
+        # elif std_soc_next < 0.01:
+        #     reward = 1
+
+        # if std_soc_next > 0.15:
+        #     reward = -50 
+        
+        # elif std_soc_next > 0.15:
+        #         reward = -50    
+
+        # elif std_soc_next > 0.1:
+        #         reward = -10 
+
+        # elif std_soc_next > 0.05: 
+        #     reward = -1
+
 
         if np.all(action == 0):
             reward = -100
+
+
+        # reward += 1 * np.exp(-np.std(state_soc_next) * 100) * np.abs(reward)
+
+
 
 
         return reward

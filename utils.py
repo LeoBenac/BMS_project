@@ -23,42 +23,24 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
 
     # Plotting the evolution of states for each cell
     for i in range(bms.num_cells):
-        start_idx = 0
-        for j in range(len(states) - 1):
-            if actions[j][i] != actions[start_idx][i]:
-                linestyle = '-' if actions[start_idx][i] == 1 else '-'
-                axs[0, 0].plot(range(start_idx, j + 1), [states[k][i] for k in range(start_idx, j + 1)],
-                               color=colors[i], linestyle=linestyle, label=f'Cell {i + 1}' if start_idx == 0 else "")
-                start_idx = j
-        # Plot the last segment
-        linestyle = '-' if actions[start_idx][i] == 1 else '--'
-        axs[0, 0].plot(range(start_idx, len(states)), [states[k][i] for k in range(start_idx, len(states))],
-                       color=colors[i], linestyle=linestyle, label=f'Cell {i + 1}' if start_idx == 0 else "")
-
+        axs[0, 0].plot(range(len(states)), [states[k][i] for k in range(len(states))],
+                    color=colors[i], label=f'Cell {i + 1}')
+        
     axs[0, 0].set_xlabel('Time Step')
     axs[0, 0].set_ylabel('Voltage')
     axs[0, 0].set_title('Voltage vs Time Step for Each Cell')
-    # axs[0, 0].legend()
+    axs[0, 0].legend()
     axs[0, 0].set_ylim(bms.MIN_VOLTAGE - 0.5, bms.MAX_VOLTAGE + 0.5)
 
     # Plotting the evolution of states_soc for each cell
+        # Plotting the evolution of states_soc for each cell
     for i in range(bms.num_cells):
-        start_idx = 0
-        for j in range(len(states_soc) - 1):
-            if actions[j][i] != actions[start_idx][i]:
-                linestyle = '-' if actions[start_idx][i] == 1 else '-'
-                axs[0, 1].plot(range(start_idx, j + 1), [states_soc[k][i] for k in range(start_idx, j + 1)],
-                               color=colors[i], linestyle=linestyle, label=f'Cell {i + 1}' if start_idx == 0 else "")
-                start_idx = j
-        # Plot the last segment
-        linestyle = '-' if actions[start_idx][i] == 1 else '--'
-        axs[0, 1].plot(range(start_idx, len(states_soc)), [states_soc[k][i] for k in range(start_idx, len(states_soc))],
-                       color=colors[i], linestyle=linestyle, label=f'Cell {i + 1}' if start_idx == 0 else "")
-
+        axs[0, 1].plot(range(len(states_soc)), [states_soc[k][i] for k in range(len(states_soc))],
+                       color=colors[i], label=f'Cell {i + 1}')
     axs[0, 1].set_xlabel('Time Step')
     axs[0, 1].set_ylabel('State of Charge (SOC)')
     axs[0, 1].set_title('State of Charge (SOC) vs Time Step for Each Cell')
-    # axs[0, 1].legend()
+    axs[0, 1].legend()
     axs[0, 1].set_ylim((0, 1))
 
     # Plotting the evolution of actions for each cell
@@ -77,7 +59,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
     # Add legend for colors
     legend_elements = [Line2D([0], [0], color='blue', lw=4, label='ON'),
                        Line2D([0], [0], color='red', lw=4, label='OFF')]
-    # axs[1, 0].legend(handles=legend_elements, loc='upper right')
+    axs[1, 0].legend(handles=legend_elements, loc='upper right')
 
     # Plotting the evolution of accumulated rewards
     if not include_bad_rewards:
@@ -95,7 +77,7 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
     axs[1, 1].set_xlabel('Time Step')
     axs[1, 1].set_ylabel('Normalized Accumulated Rewards')
     axs[1, 1].set_title('Normalized Accumulated Rewards vs Time Step')
-    # axs[1, 1].legend()
+    axs[1, 1].legend()
 
     plt.tight_layout()
     plt.show()
@@ -141,11 +123,24 @@ def discretize(value: float, bins: np.array) -> int:
     Raises:
     ValueError: If the value is outside the allowed range.
     """
-    if not (2.2 <= value < 4.2):
-        raise ValueError("Value must be between 2.2 and 4.2")
+    if not (0.1 <= value < 0.9):
+        raise ValueError("Value must be between 0.1 and 0.9")
 
     bin_number = np.digitize(value, bins) - 1  # Subtract 1 to get 0-based index
     return bin_number
+
+# def discretize_features(values: np.array, bins: np.array) -> np.array:
+#     """
+#     Discretize multiple continuous features into bin numbers based on predefined ranges and densities.
+
+#     Parameters:
+#     values (np.array): The continuous values to be discretized.
+
+#     Returns:
+#     np.array: The bin numbers corresponding to the input values.
+#     """
+#     return np.array([discretize(value, bins) for value in values])
+
 
 def discretize_features(values: np.array, bins: np.array) -> np.array:
     """
@@ -153,11 +148,21 @@ def discretize_features(values: np.array, bins: np.array) -> np.array:
 
     Parameters:
     values (np.array): The continuous values to be discretized.
+    bins (np.array): The bins used for discretization.
 
     Returns:
     np.array: The bin numbers corresponding to the input values.
+
     """
-    return np.array([discretize(value, bins) for value in values])
+    values = np.array(values)
+
+
+    if not np.all((0.1 <= values) & (values < 0.9)):
+        raise ValueError("All values must be between 0.1 and 0.9")
+
+    # Use np.digitize directly on the entire array
+    bin_numbers = np.digitize(values, bins) - 1  # Subtract 1 to get 0-based index
+    return bin_numbers
 
 def combination_to_integer(discretized_values: np.array, num_bins: int) -> int:
     """
