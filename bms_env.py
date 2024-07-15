@@ -186,7 +186,7 @@ class BMSenv(gym.Env):
         # reward = (np.max(state_soc) - np.min(state_soc)) - (np.max(state_soc_next) - np.min(state_soc_next))
 
 
-        reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward  - (np.max(state_soc_next) - np.min(state_soc_next))/self.w_reward
+        reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward  - (np.max(state_soc_next) - np.min(state_soc_next))/(self.w_reward /50)
 
 
         # reward =  (np.std(state_soc) -  np.std(state_soc_next)) * self.w_reward
