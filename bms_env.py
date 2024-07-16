@@ -123,7 +123,8 @@ class BMSenv(gym.Env):
         action (int): The action taken
         """
 
-        state_SoC = self.map_voltage_to_soc(self.state, self.k_tanh_params)
+        # state_SoC = self.map_voltage_to_soc(self.state, self.k_tanh_params)
+        state_SoC = self.state_soc
         # switch_action = self.int_action_to_switch_action(action)
         switch_action = action.copy()
 
@@ -186,7 +187,7 @@ class BMSenv(gym.Env):
         # reward = (np.max(state_soc) - np.min(state_soc)) - (np.max(state_soc_next) - np.min(state_soc_next))
 
 
-        reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward  - (np.max(state_soc_next) - np.min(state_soc_next))/(self.w_reward /50)
+        reward =  (np.std(state_soc) -  np.std(state_soc_next))* self.w_reward  - (np.max(state_soc_next) - np.min(state_soc_next))/(self.w_reward )
 
 
         # reward =  (np.std(state_soc) -  np.std(state_soc_next)) * self.w_reward
