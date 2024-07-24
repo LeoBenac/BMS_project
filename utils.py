@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
 
-def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include_bad_rewards=False):
+def plot_bms_evolution(bms, states, states_voltages, actions, rewards, dones, include_bad_rewards=False):
     
     colors = plt.cm.tab10.colors[:bms.num_cells]
 
@@ -27,21 +27,21 @@ def plot_bms_evolution(bms, states, states_soc, actions, rewards, dones, include
                     color=colors[i], label=f'Cell {i + 1}')
         
     axs[0, 0].set_xlabel('Time Step')
-    axs[0, 0].set_ylabel('Voltage')
-    axs[0, 0].set_title('Voltage vs Time Step for Each Cell')
+    axs[0, 0].set_ylabel('SoC')
+    axs[0, 0].set_title('SoC vs Time Step for Each Cell')
     axs[0, 0].legend()
-    axs[0, 0].set_ylim(bms.MIN_VOLTAGE - 0.5, bms.MAX_VOLTAGE + 0.5)
+    axs[0, 0].set_ylim(0, 1)
 
     # Plotting the evolution of states_soc for each cell
         # Plotting the evolution of states_soc for each cell
     for i in range(bms.num_cells):
-        axs[0, 1].plot(range(len(states_soc)), [states_soc[k][i] for k in range(len(states_soc))],
+        axs[0, 1].plot(range(len(states_voltages)), [states_voltages[k][i] for k in range(len(states_voltages))],
                        color=colors[i], label=f'Cell {i + 1}')
     axs[0, 1].set_xlabel('Time Step')
-    axs[0, 1].set_ylabel('State of Charge (SOC)')
-    axs[0, 1].set_title('State of Charge (SOC) vs Time Step for Each Cell')
+    axs[0, 1].set_ylabel('Terminal Voltage (V)')
+    axs[0, 1].set_title('Terminal Voltage (V) vs Time Step for Each Cell')
+    axs[0, 1].set_ylim(bms.MIN_VOLTAGE - 0.5, bms.MAX_VOLTAGE + 0.5)
     axs[0, 1].legend()
-    axs[0, 1].set_ylim((0, 1))
 
     # Plotting the evolution of actions for each cell
     for i in range(bms.num_cells):
@@ -92,19 +92,19 @@ def plot_voltage_vs_soc(bms):
     bms (BMSenv): The BMS environment instance.
     """
     # Generate a range of voltage values
-    voltages = np.linspace(bms.MIN_VOLTAGE, bms.MAX_VOLTAGE, 100)
+    soc_values = np.linspace(bms.MIN_SOC , bms.MAX_SOC, 100)
     
     # Compute SOC values for each cell using the map_voltage_to_soc method
-    soc_values = np.array([bms.map_voltage_to_soc(voltages, k) for k in bms.k_tanh_params])
+    voltage_values = np.array([bms.map_soc_to_voltage(soc_values, k) for k in bms.k_tanh_params])
     
     # Plotting the data
     plt.figure(figsize=(10, 6))
     for i in range(bms.num_cells):
-        plt.plot(voltages, soc_values[i], label=f'Cell {i+1}')
+        plt.plot(soc_values, voltage_values[i], label=f'Cell {i+1}')
     
-    plt.xlabel('Voltage (V)')
-    plt.ylabel('State of Charge (SOC)')
-    plt.title('Voltage vs State of Charge (SOC) for Each Cell')
+    plt.ylabel('Voltage (OCV)')
+    plt.xlabel('State of Charge (SOC)')
+    plt.title('OCV-Voltage vs State of Charge (SOC) for Each Cell')
     plt.legend()
     plt.show()
 
