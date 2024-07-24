@@ -32,7 +32,7 @@ class BMSenv(gym.Env):
 
     
     def __init__(self, num_cells: int = 2,  k_tanh_params : list = [k_default, k_default],
-                   Q_cells: list = [Q_default, Q_default], w_reward= 100.0):
+                   Q_cells: list = [Q_default, Q_default], w_reward= 100.0, seed = 0):
         
         super(BMSenv, self).__init__()
 
@@ -49,9 +49,11 @@ class BMSenv(gym.Env):
        
         # self._initialize_state()
         self.w_reward = w_reward
+        self.seed = seed
 
 
     def _initialize_state(self) -> None:
+        np.random.seed(self.seed)
         self.state = np.random.uniform(self.INIT_SOC_MIN, self.INIT_SOC_MAX, self.num_cells)
         self.state = np.random.uniform(0.1, 0.1, self.num_cells)
         self.state_voltage = self.map_soc_to_voltage(self.state, self.k_tanh_params)
@@ -107,7 +109,7 @@ class BMSenv(gym.Env):
         self.i_R1 = self.i_R1 +  (-1  + np.exp(-1/(self.R1 * self.C1)))*self.i_R1 + (1 - np.exp(-1/(self.R1 * self.C1)))*self.I_CURRENT 
         self.i_R2 = self.i_R2 +  (-1  + np.exp(-1/(self.R2 * self.C2)))*self.i_R2 + (1 - np.exp(-1/(self.R2 * self.C2)))*self.I_CURRENT
 
-        self.state_voltage = self.map_soc_to_voltage(state, self.k_tanh_params) - self.R0 * self.I_CURRENT - self.i_R1 * self.R1 - self.i_R2 * self.R2
+        self.state_voltage = self.map_soc_to_voltage(state, self.k_tanh_params) - self.R0 * (self.I_CURRENT + (switch_action * (self.state_voltage/self.R_SHUNT)) ) - self.i_R1 * self.R1 - self.i_R2 * self.R2
 
 
         next_state = state - ( ( self.I_CURRENT + (switch_action * (self.state_voltage/self.R_SHUNT))  ) * (self.TIMESTEP / self.Q_cells) )     
