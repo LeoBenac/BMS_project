@@ -1,6 +1,9 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+
 
 class BMSenv(gym.Env):
     """Custom Environment that follows gym interface"""
@@ -12,19 +15,25 @@ class BMSenv(gym.Env):
     MIN_VOLTAGE = 3.3
     MAX_SOC = 0.9
     MIN_SOC = 0.1
-    RESISTOR_SHUNT = 6
-    TIMESTEP = 1e-1
+    TIMESTEP = 30/3600
     INIT_SOC_MAX = 0.3
     INIT_SOC_MIN = 0.1
     I_CURRENT = -2.35
-    R0 = 0.106033
-    R1 = 0.0322
-    C1 = 921.61
-    R2 = 0.008266
-    C2 = 730.31
-    Q_default = 3_400
+    Q_default = 3.4
     k_default = 0.0
-    R_SHUNT = 6
+    R_SHUNT = 4
+    DATA = np.array([
+    [0.9, 0.1063, 0.0303, 726.32, 0.0099, 636.78],
+    [0.8, 0.1016, 0.0302, 734.10, 0.0102, 594.41],
+    [0.7, 0.1020, 0.0315, 766.53, 0.0105, 575.44],
+    [0.6, 0.1023, 0.0390, 929.76, 0.0078, 613.48],
+    [0.5, 0.1024, 0.0271, 1131.40, 0.0078, 789.73],
+    [0.4, 0.1040, 0.0275, 1161.67, 0.0077, 791.77],
+    [0.3, 0.1042, 0.0272, 1128.74, 0.0077, 788.39],
+    [0.2, 0.1070, 0.0272, 982.50, 0.0076, 746.24],
+    [0.1, 0.1325, 0.0498, 747.54, 0.0096, 639.61]
+        ])
+    models = []
 
 
 
@@ -32,12 +41,14 @@ class BMSenv(gym.Env):
 
     
     def __init__(self, num_cells: int = 2,  k_tanh_params : list = [k_default, k_default],
-                   Q_cells: list = [Q_default, Q_default], w_reward= 100.0, seed = 0):
+                   Q_cells: list = [Q_default, Q_default], w_reward= 100.0):
         
         super(BMSenv, self).__init__()
 
         # Define action and observation space
-        self.observation_space = spaces.Box(low= self.MIN_SOC, high=self.MAX_SOC , shape=(num_cells,), dtype=np.float64)
+        low = np.array([self.MIN_SOC] * num_cells + [self.MIN_VOLTAGE - 1] * num_cells)
+        high = np.array([self.MAX_SOC] * num_cells + [self.MAX_VOLTAGE + 1] * num_cells)
+        self.observation_space = spaces.Box(low=low, high=high, dtype=np.float64)
         self.action_space = spaces.MultiBinary(num_cells)
         self.num_cells = num_cells
 
@@ -49,16 +60,38 @@ class BMSenv(gym.Env):
        
         # self._initialize_state()
         self.w_reward = w_reward
-        self.seed = seed
+
+        data = self.DATA    
 
 
-    def _initialize_state(self) -> None:
-        np.random.seed(self.seed)
-        self.state = np.random.uniform(self.INIT_SOC_MIN, self.INIT_SOC_MAX, self.num_cells)
-        self.state = np.random.uniform(0.1, 0.1, self.num_cells)
-        self.state_voltage = self.map_soc_to_voltage(self.state, self.k_tanh_params)
+        # Splitting the data
+        X = data[:, 0].reshape(-1, 1)  # SoC values
+        Y = data[:, 1:]  # Remaining columns
+
+        # Transform input data to include quadratic terms
+        poly = PolynomialFeatures(degree= 4)
+        X_poly = poly.fit_transform(X)
+
+        # Train a model for each output
+        for i in range(Y.shape[1]):
+            model = LinearRegression()
+            model.fit(X_poly, Y[:, i])
+            self.models.append(model)
+
+        self.poly = poly
+
+
+    def _initialize_state(self, seed = None) -> None:
+        if seed is not None:
+            np.random.seed(seed)
+        init_state_soc = np.random.uniform(self.INIT_SOC_MIN, self.INIT_SOC_MAX, self.num_cells)
+        # init_state_soc = np.random.uniform(0.1, 0.1, self.num_cells)
+        init_state_voltage = self.map_soc_to_voltage(init_state_soc, self.k_tanh_params)
+        self.state = np.concatenate([init_state_soc, init_state_voltage])
         self.i_R1 = 0
         self.i_R2 = 0
+
+
 
     def get_state(self) -> np.array:
         return self.state
@@ -98,25 +131,74 @@ class BMSenv(gym.Env):
 
         """
 
+
+
         if type(action) == list or type(action) == tuple:
             action = np.array(action)
 
         # state_SoC = self.map_voltage_to_soc(self.state, self.k_tanh_params)
         state = self.state
         # switch_action = self.int_action_to_switch_action(action)
+        state_soc = state[:self.num_cells].copy()
+        state_voltage = state[self.num_cells:].copy()
+
+        R0 = self.models[0].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        R1 = self.models[1].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        C1 = self.models[2].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        R2 = self.models[3].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        C2 = self.models[4].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+
+        self.R0 = R0
+        self.R1 = R1
+        self.C1 = C1
+        self.R2 = R2
+        self.C2 = C2
+
+        # print(f"R0: {R0}, R1: {R1}, C1: {C1}, R2: {R2}, C2: {C2}")
+
+
         switch_action = action.copy()
 
         self.i_R1 = self.i_R1 +  (-1  + np.exp(-1/(self.R1 * self.C1)))*self.i_R1 + (1 - np.exp(-1/(self.R1 * self.C1)))*self.I_CURRENT 
         self.i_R2 = self.i_R2 +  (-1  + np.exp(-1/(self.R2 * self.C2)))*self.i_R2 + (1 - np.exp(-1/(self.R2 * self.C2)))*self.I_CURRENT
 
-        self.state_voltage = self.map_soc_to_voltage(state, self.k_tanh_params) - self.R0 * (self.I_CURRENT + (switch_action * (self.state_voltage/self.R_SHUNT)) ) - self.i_R1 * self.R1 - self.i_R2 * self.R2
+        state_voltage_next = self.map_soc_to_voltage(state_soc, self.k_tanh_params) - self.R0 * (self.I_CURRENT  ) - self.i_R1 * self.R1 - self.i_R2 * self.R2
+
+        # print('\nstate_voltage_next: ', state_voltage_next)
+
+        # state_voltage_next = self.map_soc_to_voltage(state_soc, self.k_tanh_params) - self.R0 * (self.I_CURRENT + (switch_action * (state_voltage/self.R_SHUNT)) ) - self.i_R1 * self.R1 - self.i_R2 * self.R2
+        state_soc_next = state_soc - ( ( self.I_CURRENT + (switch_action * (state_voltage/self.R_SHUNT))  ) * (self.TIMESTEP / self.Q_cells) )     
 
 
-        next_state = state - ( ( self.I_CURRENT + (switch_action * (self.state_voltage/self.R_SHUNT))  ) * (self.TIMESTEP / self.Q_cells) )     
+        self.state = np.concatenate([state_soc_next, state_voltage_next])
 
-        self.state = next_state
+    def discharge(self) -> None:
+        """
+        Discharge the battery cells by a constant current.
+        """
+        state = self.state
+        state_soc = state[:self.num_cells].copy()
+        state_voltage = state[self.num_cells:].copy()
 
+        R0 = self.models[0].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        R1 = self.models[1].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        C1 = self.models[2].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        R2 = self.models[3].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
+        C2 = self.models[4].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
 
+        self.R0 = R0
+        self.R1 = R1
+        self.C1 = C1
+        self.R2 = R2
+        self.C2 = C2
+
+        self.i_R1 = self.i_R1 +  (-1  + np.exp(-1/(self.R1 * self.C1)))*self.i_R1 + (1 - np.exp(-1/(self.R1 * self.C1)))* (-self.I_CURRENT)
+        self.i_R2 = self.i_R2 +  (-1  + np.exp(-1/(self.R2 * self.C2)))*self.i_R2 + (1 - np.exp(-1/(self.R2 * self.C2)))* (-self.I_CURRENT)
+
+        state_voltage_next = self.map_soc_to_voltage(state_soc, self.k_tanh_params) - self.R0 * ((-self.I_CURRENT)  ) - self.i_R1 * self.R1 - self.i_R2 * self.R2
+        state_soc_next = state_soc - ( ( (-self.I_CURRENT) ) * (self.TIMESTEP / self.Q_cells) )     
+
+        self.state = np.concatenate([state_soc_next, state_voltage_next])
 
 
     def step(self, action) -> tuple:
@@ -136,14 +218,18 @@ class BMSenv(gym.Env):
             action = np.array(action)
 
         state = self.get_state().copy()
-        state_voltage = self.state_voltage.copy()
+
+        state_soc = self.state[:self.num_cells].copy()
+        state_voltage = self.state[self.num_cells:].copy()
 
         self.charge(action)
 
         state_next = self.get_state().copy()
-        state_voltage_next = self.state_voltage.copy()
 
-        reward = self.get_reward(state, state_next, action, state_voltage, state_voltage_next)
+        state_soc_next = state_next[:self.num_cells].copy()
+        state_voltage_next = state_next[self.num_cells:].copy
+
+        reward = self.get_reward(state, action, state_next)
 
 
         done = bool(self.is_done())
@@ -153,7 +239,7 @@ class BMSenv(gym.Env):
         return state_next, reward, done, truncated, info
     
 
-    def get_reward(self, state: np.array, state_next: np.array, action: int, state_soc: np.array, state_soc_next: np.array) -> float:
+    def get_reward(self, state: np.array,  action: np.array, state_next: np.array) -> float:
         """
         Calculate and return the reward for a given action.
         
@@ -169,9 +255,18 @@ class BMSenv(gym.Env):
         Returns:
         float: The calculated reward.
         """
+
+        state_soc = state[:self.num_cells].copy()
+        state_voltage = state[self.num_cells:].copy()
+
+        state_soc_next = state_next[:self.num_cells].copy()
+        state_voltage_next = state_next[self.num_cells:].copy()
+
+
         
 
-        reward =  (np.std(state) -  np.std(state_next))* self.w_reward  - (np.max(state_next) - np.min(state))/(self.w_reward )
+        reward =  ((np.std(state_soc) -  np.std(state_soc_next))* self.w_reward  - (np.max(state_soc_next) - np.min(state_soc))/(self.w_reward ) ) \
+                # + ((np.std(state_voltage) -  np.std(state_voltage_next))* self.w_reward  - (np.max(state_voltage_next) - np.min(state_voltage))/(self.w_reward ) )
 
 
 
@@ -186,7 +281,11 @@ class BMSenv(gym.Env):
         Returns:
         done (bool): Whether the episode has ended
         """
-        return self.state.max() >= (self.MAX_SOC - 1e-6)
+
+        state = self.get_state()
+        state_soc = state[:self.num_cells].copy()
+
+        return state_soc.max() >= (self.MAX_SOC - 1e-6)
     
 
     
@@ -202,10 +301,9 @@ class BMSenv(gym.Env):
         info (dict): Additional info
         """
 
-        if seed is not None:
-            np.random.seed(seed)
+        
 
-        self._initialize_state()
+        self._initialize_state(seed=seed)
         state = self.get_state()
         info = {}  # Add any additional info you want to return
 
@@ -232,9 +330,16 @@ class BMSenv(gym.Env):
                 f"        INIT_SOC_MIN={self.INIT_SOC_MIN},\n"
                 f"        I_CURRENT={self.I_CURRENT},\n"
                 f"        TIMESTEP={self.TIMESTEP},\n"
+                f"        SOC={self.state[:self.num_cells]},\n"
+                f"        VOLTAGE={self.state[self.num_cells:]},\n"
                 f"        w_reward={self.w_reward},\n"
-                f"        current_state={self.state},\n"
-                f"        current_soc={self.state_soc})")
+                f"        R_SHUNT={self.R_SHUNT}"
+                f"        R0={self.R0}"
+                f"        R1={self.R1}"
+                f"        C1={self.C1}"
+                f"        R2={self.R2}"
+                f"        C2={self.C2}")
+
 
 
     
