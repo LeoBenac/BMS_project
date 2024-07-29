@@ -21,7 +21,7 @@ class BMSenv(gym.Env):
     I_CURRENT = -2.35
     Q_default = 3.4
     k_default = 0.0
-    R_SHUNT = 4
+    R_SHUNT = 3
     DATA = np.array([
     [0.9, 0.1063, 0.0303, 726.32, 0.0099, 636.78],
     [0.8, 0.1016, 0.0302, 734.10, 0.0102, 594.41],
@@ -46,10 +46,12 @@ class BMSenv(gym.Env):
         super(BMSenv, self).__init__()
 
         # Define action and observation space
-        low = np.array([self.MIN_SOC] * num_cells + [self.MIN_VOLTAGE - 1] * num_cells)
-        high = np.array([self.MAX_SOC] * num_cells + [self.MAX_VOLTAGE + 1] * num_cells)
+        low = np.array([self.MIN_SOC] * num_cells + [self.MIN_VOLTAGE - 1] * num_cells + [0] * num_cells)
+        high = np.array([self.MAX_SOC] * num_cells + [self.MAX_VOLTAGE + 1] * num_cells + [1] * num_cells)
         self.observation_space = spaces.Box(low=low, high=high, dtype=np.float64)
         self.action_space = spaces.MultiBinary(num_cells)
+
+
         self.num_cells = num_cells
 
         assert len(k_tanh_params) == self.num_cells, "Size of k_tanh_params must match num_cells"
@@ -87,7 +89,9 @@ class BMSenv(gym.Env):
         init_state_soc = np.random.uniform(self.INIT_SOC_MIN, self.INIT_SOC_MAX, self.num_cells)
         # init_state_soc = np.random.uniform(0.1, 0.1, self.num_cells)
         init_state_voltage = self.map_soc_to_voltage(init_state_soc, self.k_tanh_params)
-        self.state = np.concatenate([init_state_soc, init_state_voltage])
+        
+
+        self.state = np.concatenate([init_state_soc, init_state_voltage, np.zeros(self.num_cells)])
         self.i_R1 = 0
         self.i_R2 = 0
 
@@ -131,6 +135,7 @@ class BMSenv(gym.Env):
 
         """
 
+        # assert np.all(self.last_action == self.state[-self.num_cells:]), "Action must be the last action taken"
 
 
         if type(action) == list or type(action) == tuple:
@@ -140,7 +145,7 @@ class BMSenv(gym.Env):
         state = self.state
         # switch_action = self.int_action_to_switch_action(action)
         state_soc = state[:self.num_cells].copy()
-        state_voltage = state[self.num_cells:].copy()
+        state_voltage = state[self.num_cells: 2*self.num_cells].copy()
 
         R0 = self.models[0].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
         R1 = self.models[1].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
@@ -170,7 +175,8 @@ class BMSenv(gym.Env):
         state_soc_next = state_soc - ( ( self.I_CURRENT + (switch_action * (state_voltage/self.R_SHUNT))  ) * (self.TIMESTEP / self.Q_cells) )     
 
 
-        self.state = np.concatenate([state_soc_next, state_voltage_next])
+
+        self.state = np.concatenate([state_soc_next, state_voltage_next, switch_action])
 
     def discharge(self) -> None:
         """
@@ -178,7 +184,7 @@ class BMSenv(gym.Env):
         """
         state = self.state
         state_soc = state[:self.num_cells].copy()
-        state_voltage = state[self.num_cells:].copy()
+        state_voltage = state[self.num_cells: 2*self.num_cells].copy()
 
         R0 = self.models[0].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
         R1 = self.models[1].predict(self.poly.fit_transform(state_soc.reshape(-1, 1)))
@@ -196,9 +202,10 @@ class BMSenv(gym.Env):
         self.i_R2 = self.i_R2 +  (-1  + np.exp(-1/(self.R2 * self.C2)))*self.i_R2 + (1 - np.exp(-1/(self.R2 * self.C2)))* (-self.I_CURRENT)
 
         state_voltage_next = self.map_soc_to_voltage(state_soc, self.k_tanh_params) - self.R0 * ((-self.I_CURRENT)  ) - self.i_R1 * self.R1 - self.i_R2 * self.R2
-        state_soc_next = state_soc - ( ( (-self.I_CURRENT) ) * (self.TIMESTEP / self.Q_cells) )     
+        state_soc_next = state_soc - ( ( (-self.I_CURRENT) ) * (self.TIMESTEP / self.Q_cells) )  
 
-        self.state = np.concatenate([state_soc_next, state_voltage_next])
+
+        self.state = np.concatenate([state_soc_next, state_voltage_next, np.zeros(self.num_cells)])
 
 
     def step(self, action) -> tuple:
@@ -220,7 +227,9 @@ class BMSenv(gym.Env):
         state = self.get_state().copy()
 
         state_soc = self.state[:self.num_cells].copy()
-        state_voltage = self.state[self.num_cells:].copy()
+        state_voltage = self.state[self.num_cells: 2*self.num_cells].copy()
+
+        self.last_action = self.state[-self.num_cells:].copy()
 
         self.charge(action)
 
@@ -237,6 +246,9 @@ class BMSenv(gym.Env):
         info = {}
         
         return state_next, reward, done, truncated, info
+    
+    def f(self, x):
+        return 2_735_042.72 * x**2 - 4_683_760.68 * x + 1_000_000
     
 
     def get_reward(self, state: np.array,  action: np.array, state_next: np.array) -> float:
@@ -256,22 +268,44 @@ class BMSenv(gym.Env):
         float: The calculated reward.
         """
 
+
+
+        assert np.all(action == state_next[-self.num_cells:]), "Action must be the last action taken"
+
         state_soc = state[:self.num_cells].copy()
         state_voltage = state[self.num_cells:].copy()
 
         state_soc_next = state_next[:self.num_cells].copy()
         state_voltage_next = state_next[self.num_cells:].copy()
+       
 
 
         
 
-        reward =  ((np.std(state_soc) -  np.std(state_soc_next))* self.w_reward  - (np.max(state_soc_next) - np.min(state_soc))/(self.w_reward ) ) \
+        variance_term =  ( (np.std(state_soc) -  np.std(state_soc_next)) * self.w_reward)
+        max_min_term = (np.max(state_soc_next) - np.min(state_soc_next))
+        switch_term =  np.sum(state[-self.num_cells:] != state_next[-self.num_cells:])
+        # print(last_action, action, switch_term)
+
+        reward  = variance_term - (variance_term/self.num_cells) * switch_term - (1.0/0.10) * (max_min_term)
+        # reward = - (1.0 * 1.0 ) * switch_term
+        # print(switch_term, state[-self.num_cells:], state_next[-self.num_cells:])
+
+
+        # - ((np.max(state_soc_next) - np.min(state_soc_next))/(self.w_reward ))
+                
                 # + ((np.std(state_voltage) -  np.std(state_voltage_next))* self.w_reward  - (np.max(state_voltage_next) - np.min(state_voltage))/(self.w_reward ) )
 
+        # if self.is_done():
+        #     diff = np.abs(state_soc_next.min() - .90) 
+        #     reward = self.f(diff)
 
 
+        
 
         return reward
+    
+    
     
 
     def is_done(self) -> bool:
