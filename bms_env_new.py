@@ -15,6 +15,8 @@ class BMSenv(gym.Env):
     MIN_VOLTAGE = 3.3
     MAX_SOC = 0.9
     MIN_SOC = 0.1
+    R_SHUNT = 3
+
     TIMESTEP = 30/3600
     INIT_SOC_MAX = 0.3
     INIT_SOC_MIN = 0.1
@@ -41,7 +43,7 @@ class BMSenv(gym.Env):
 
     
     def __init__(self, num_cells: int = 2,  k_tanh_params : list = [k_default, k_default],
-                   Q_cells: list = [Q_default, Q_default], w_reward= 100.0):
+                   Q_cells: list = [Q_default, Q_default], w_reward= 100.0, var_weight = .4, max_min_weight= .3, switch_weight= .3, w_max = 1.0):
         
         super(BMSenv, self).__init__()
 
@@ -62,8 +64,14 @@ class BMSenv(gym.Env):
        
         # self._initialize_state()
         self.w_reward = w_reward
+        self.var_weight = var_weight
+        self.max_min_weight = max_min_weight
+        self.switch_weight = switch_weight
 
-        data = self.DATA    
+
+        data = self.DATA   
+
+        self.mismatch = 0 
 
 
         # Splitting the data
@@ -242,6 +250,11 @@ class BMSenv(gym.Env):
 
 
         done = bool(self.is_done())
+
+        if done:
+            self.mean_capacity = np.mean(state_soc_next)
+            self.std_capacity = np.std(state_soc_next)
+
         truncated = bool(done)
         info = {}
         
@@ -280,25 +293,21 @@ class BMSenv(gym.Env):
        
 
 
-        
+        assert  1.0 - 1e-5 <= self.var_weight + self.max_min_weight + self.switch_weight <= 1.0 + 1e-5, "Weights must sum to 1.0"
 
-        variance_term =  ( (np.std(state_soc) -  np.std(state_soc_next)) * self.w_reward)
-        max_min_term = (np.max(state_soc_next) - np.min(state_soc_next))
+        # variance_term =  ( (np.std(state_soc) -  np.std(state_soc_next)) * self.w_reward)
+        variance_term =  ( (np.std(state_soc) -  np.std(state_soc_next)) * 1.0)
+
+        max_min_term = ( (np.max(state_soc) - np.min(state_soc)) - (np.max(state_soc_next) - np.min(state_soc_next) ) )
         switch_term =  np.sum(state[-self.num_cells:] != state_next[-self.num_cells:])
-        # print(last_action, action, switch_term)
 
-        reward  = variance_term - (variance_term/self.num_cells) * switch_term - (1.0/0.10) * (max_min_term)
-        # reward = - (1.0 * 1.0 ) * switch_term
-        # print(switch_term, state[-self.num_cells:], state_next[-self.num_cells:])
+        # reward  = variance_term - (variance_term/self.num_cells) * switch_term - (self.w_max * 1.0/0.05) * (max_min_term)
+        
+        self.mismatch += switch_term
 
 
-        # - ((np.max(state_soc_next) - np.min(state_soc_next))/(self.w_reward ))
-                
-                # + ((np.std(state_voltage) -  np.std(state_voltage_next))* self.w_reward  - (np.max(state_voltage_next) - np.min(state_voltage))/(self.w_reward ) )
-
-        # if self.is_done():
-        #     diff = np.abs(state_soc_next.min() - .90) 
-        #     reward = self.f(diff)
+        reward  = self.var_weight * ( (variance_term + 1e-3)/(2e-3) ) - self.switch_weight * (switch_term / self.num_cells) + self.max_min_weight * ( (max_min_term + 3e-3)/(6e-3) )
+                                     
 
 
         
